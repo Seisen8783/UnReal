@@ -1,0 +1,33 @@
+name: AConsoleMobile
+options:
+  bundleIdPrefix: com.unreal.console
+  deploymentTarget:
+    iOS: "17.4"
+packages:
+  TrackCore:
+    path: Packages/TrackCore
+targets:
+  AConsoleMobile:
+    type: application
+    platform: iOS
+    sources:
+      - path: AConsoleMobile/App
+      - path: AConsoleMobile/Device
+      - path: AConsoleMobile/KeepAlive
+      - path: AConsoleMobile/Replay
+      - path: AConsoleMobile/UI
+    info:
+      path: AConsoleMobile/Resources/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.unreal.console.mobile
+        PRODUCT_NAME: A Console Mobile
+        SWIFT_VERSION: "5.9"
+        CODE_SIGNING_ALLOWED: "NO"
+        HEADER_SEARCH_PATHS: $(PROJECT_DIR)/bridge/include
+        SWIFT_INCLUDE_PATHS: $(PROJECT_DIR)/bridge/include
+        OTHER_LDFLAGS: -lc++
+    dependencies:
+      - package: TrackCore
+      - framework: bridge/build/ACBridge.xcframework
+        embed: false

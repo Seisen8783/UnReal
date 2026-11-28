@@ -1,0 +1,4 @@
+module ACBridge {
+    header "ac_bridge.h"
+    export *
+}
