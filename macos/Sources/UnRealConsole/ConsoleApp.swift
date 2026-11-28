@@ -178,6 +178,14 @@ struct ConsoleView: View {
                 }
             }
 
+            Button { model.applyCampusRunPreset() } label: {
+                Label("校园跑模式", systemImage: "flag.checkered")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.bordered)
+            .disabled(model.busy)
+            .help("一键套用校园跑设置：内置轨迹、标定偏移 东 -17.2 / 北 -11.5、上报口径「原样」、配速 8'00\"、1.50 km")
+
             Spacer()
             if let serial = model.pendingID, !model.busy {
                 Label("设备 …\(serial.suffix(5)) 定位状态待确认", systemImage: "exclamationmark.triangle")
@@ -345,6 +353,9 @@ struct ConsoleView: View {
 
     private var workspace: some View {
         VStack(alignment: .leading, spacing: 16) {
+            if model.campusRunPresetApplied {
+                CampusRunChecklist()
+            }
             HStack(alignment: .firstTextBaseline) {
                 Text("轨迹回放").font(.title2.weight(.semibold))
                 Spacer()
@@ -465,6 +476,81 @@ struct ConsoleView: View {
         return total >= 3600
             ? String(format: "%d:%02d:%02d", total / 3600, total / 60 % 60, total % 60)
             : String(format: "%02d:%02d", total / 60, total % 60)
+    }
+}
+
+private struct CampusRunChecklist: View {
+    @State private var done: Set<Int> = []
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label("校园跑流程", systemImage: "flag.checkered")
+                    .font(.headline)
+                Spacer()
+                Text("点一下勾掉已完成的步骤")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(Array(CampusRunPreset.steps.enumerated()), id: \.offset) { index, step in
+                Button { toggle(index) } label: {
+                    HStack(alignment: .top, spacing: 9) {
+                        Image(systemName: done.contains(index) ? "checkmark.circle.fill" : "circle")
+                            .foregroundStyle(done.contains(index) ? Color.accentColor : Color.secondary)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(step.title)
+                                .strikethrough(done.contains(index))
+                                .font(.callout)
+                            Text(step.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(CampusRunPreset.cautions, id: \.self) { caution in
+                    HStack(alignment: .top, spacing: 9) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text(caution)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            HStack(spacing: 14) {
+                setting("偏移", "东 \(format(CampusRunPreset.eastMeters)) / 北 \(format(CampusRunPreset.northMeters)) m")
+                setting("口径", "原样")
+                setting("配速", "\(CampusRunPreset.pace)\" / 公里")
+                setting("目标", "\(CampusRunPreset.kilometers) km")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func setting(_ label: String, _ value: String) -> some View {
+        HStack(spacing: 4) {
+            Text(label).foregroundStyle(.tertiary)
+            Text(value).monospacedDigit()
+        }
+    }
+
+    private func format(_ value: Double) -> String {
+        value == 0 ? "0" : String(format: "%.1f", value)
+    }
+
+    private func toggle(_ index: Int) {
+        if done.contains(index) { done.remove(index) } else { done.insert(index) }
     }
 }
 

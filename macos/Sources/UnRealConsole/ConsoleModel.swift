@@ -261,11 +261,39 @@ final class ConsoleModel: ObservableObject {
         status = "已载入默认轨迹"
     }
 
+    /// 套用校园跑预设：内置轨迹 + 标定偏移 + 上报口径 + 配速 + 目标公里数。
+    ///
+    /// 站在操场边刷脸的时候不方便现调参数，这套设置都是实测出来的，
+    /// 一次套用即可。偏移值来自围栏预检，配速刻意贴近真实步速。
+    func applyCampusRunPreset() {
+        guard !busy else { return }
+        if trackSource != .bundled { loadBundledTrack() }
+        calibration = CalibrationOffset(eastMeters: CampusRunPreset.eastMeters,
+                                        northMeters: CampusRunPreset.northMeters)
+        reportAlignment = .asIs
+        if let seconds = ReplayPace.parse(CampusRunPreset.pace) {
+            geometryPace = seconds
+            appliedPace = seconds
+            paceInput = CampusRunPreset.pace
+        }
+        lengthMode = .kilometers
+        targetKilometers = CampusRunPreset.kilometers
+        kilometersEditedByUser = false
+        rebuildRoute()
+        campusRunPresetApplied = true
+        status = "校园跑预设已套用：先去桩前刷脸，再点「开始回放」"
+    }
+
+    /// 是否已套用校园跑预设。套用后侧栏显示流程清单。
+    @Published private(set) var campusRunPresetApplied = false
+
     /// 载入本地导入的轨迹，沿用用户选择的坐标基准。
     ///
     /// 导入时保留当前选择的上报口径。
     func loadLocalTrack(_ url: URL) {
         trackSource = .localFile
+        // 换了轨迹，校园跑预设的偏移量就不再适用了。
+        campusRunPresetApplied = false
         load(url)
     }
 

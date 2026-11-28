@@ -16,3 +16,7 @@ tools/autotest/
 tools/emu-track.sh
 docs/UnReal-定位接管技术总览.md
 tools/icon/build/
+
+# 本机构建产物：DMG / 安装包与下载缓存，发布走 GitHub Releases，不进仓库
+dist/
+support/
