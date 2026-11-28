@@ -1,0 +1,29 @@
+{
+  "name": "山东航空学院 校园跑电子围栏",
+  "datum": "GCJ-02",
+  "note": "服务端判定「非校园区域」用的矩形围栏，坐标与小程序上报口径一致（GCJ-02）。",
+  "fence": {
+    "minLongitude": 117.989623,
+    "maxLongitude": 117.991280,
+    "minLatitude": 37.387973,
+    "maxLatitude": 37.389754
+  },
+  "fenceSizeMeters": {
+    "eastWest": 146.6,
+    "northSouth": 198.3
+  },
+  "reachable": {
+    "minLongitude": 117.990000,
+    "maxLongitude": 117.991111,
+    "minLatitude": 37.388056,
+    "maxLatitude": 37.389722
+  },
+  "reachableSizeMeters": {
+    "eastWest": 98.3,
+    "northSouth": 185.5
+  },
+  "provenance": {
+    "fence": "2026-11-24 由微信跑步页截图反推：地图正北朝上无旋转，围栏像素框轴对齐，按已知点做像素→经纬度线性映射后高斯-牛顿最小二乘拟合，残差 ±7 m",
+    "reachable": "2026-11-24 用户现场跑出的可达极限四点（DMS 读数取整到秒），是围栏的内接矩形，不在围栏角点上"
+  }
+}
