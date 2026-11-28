@@ -52,8 +52,15 @@ final class CampusRunPresetTests: XCTestCase {
     func testPresetValuesAreLocked() {
         XCTAssertEqual(CampusRunPreset.eastMeters, -17.2, accuracy: 0.01)
         XCTAssertEqual(CampusRunPreset.northMeters, -11.5, accuracy: 0.01)
-        XCTAssertEqual(ReplayPace.parse(CampusRunPreset.pace), 480)
+        XCTAssertEqual(ReplayPace.parse(CampusRunPreset.pace), 420)
         XCTAssertEqual(CampusRunPreset.kilometers, "1.50")
+    }
+
+    /// 预设配速必须落在「正常跑步」区间：不快到非人类，也不慢到像走路。
+    func testPresetPaceIsPlausible() {
+        let seconds = ReplayPace.parse(CampusRunPreset.pace) ?? 0
+        XCTAssertGreaterThan(seconds, 240, "快于 4'00\" / 公里会被显示成非人类配速")
+        XCTAssertLessThan(seconds, 540, "慢于 9'00\" / 公里可能被判无效")
     }
 
     /// 套用预设后：全程在围栏内、余量够、且每圈长度不变。

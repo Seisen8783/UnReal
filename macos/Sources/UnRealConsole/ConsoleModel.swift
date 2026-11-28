@@ -277,8 +277,10 @@ final class ConsoleModel: ObservableObject {
             paceInput = CampusRunPreset.pace
         }
         lengthMode = .kilometers
-        targetKilometers = CampusRunPreset.kilometers
-        kilometersEditedByUser = false
+        // 用户手动填过的公里数不覆盖——那个值直接决定上报的距离，是成绩数据。
+        if !kilometersEditedByUser {
+            targetKilometers = CampusRunPreset.kilometers
+        }
         rebuildRoute()
         campusRunPresetApplied = true
         status = "校园跑预设已套用：先去桩前刷脸，再点「开始回放」"

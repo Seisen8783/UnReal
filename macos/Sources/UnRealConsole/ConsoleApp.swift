@@ -354,7 +354,7 @@ struct ConsoleView: View {
     private var workspace: some View {
         VStack(alignment: .leading, spacing: 16) {
             if model.campusRunPresetApplied {
-                CampusRunChecklist()
+                CampusRunChecklist(model: model)
             }
             HStack(alignment: .firstTextBaseline) {
                 Text("轨迹回放").font(.title2.weight(.semibold))
@@ -480,6 +480,7 @@ struct ConsoleView: View {
 }
 
 private struct CampusRunChecklist: View {
+    @ObservedObject var model: ConsoleModel
     @State private var done: Set<Int> = []
 
     var body: some View {
@@ -526,10 +527,10 @@ private struct CampusRunChecklist: View {
                 }
             }
             HStack(spacing: 14) {
-                setting("偏移", "东 \(format(CampusRunPreset.eastMeters)) / 北 \(format(CampusRunPreset.northMeters)) m")
-                setting("口径", "原样")
-                setting("配速", "\(CampusRunPreset.pace)\" / 公里")
-                setting("目标", "\(CampusRunPreset.kilometers) km")
+                setting("偏移", "东 \(format(model.calibration.eastMeters)) / 北 \(format(model.calibration.northMeters)) m")
+                setting("口径", model.reportAlignment.displayName)
+                setting("配速", "\(model.paceInput)\" / 公里")
+                setting("目标", "\(model.targetKilometers.isEmpty ? "—" : model.targetKilometers) km")
             }
             .font(.caption)
             .foregroundStyle(.secondary)
