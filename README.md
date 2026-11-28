@@ -79,6 +79,103 @@ Windows 版为测试版，目标环境为 **Windows 11 x64** 和 **iOS 17.4 或�
 3. 点击「定位到起点」，在 iPhone 上核对位置，再点「开始回放」。回放期间保持 USB 连接，可暂停、继续或拖动时间轴跳转。
 4. 回放结束后会返回轨迹起点。使用完毕后点击「恢复真实定位」，并在 iPhone 上确认。若 USB 已断开，重新连接原 iPhone 再执行恢复。
 
+## 五、技术原理与架构图
+
+### 1. 双端定位模拟总链路（桌面 USB vs 手机单机自回环）
+
+无论是桌面版（`main` / `macos/` / `windows/`）还是独立分支 `ios-mobile` 中的手机单机版，底层都通过 iOS 开发者服务 `com.apple.instruments.server.services.LocationSimulation` 替换整机 `CoreLocation` 输出（免越狱、无需修改目标应用）：
+
+```mermaid
+flowchart LR
+    subgraph Desktop["桌面版（macOS / Windows）"]
+        DUI["A Console 桌面端 (SwiftUI / PySide6)"]
+        DBridge["device_bridge.py (pymobiledevice3)"]
+        DUSB["USB 数据线 / usbmuxd"]
+        DUI --> DBridge --> DUSB
+    end
+
+    subgraph Mobile["手机单机版（ios-mobile 分支）"]
+        MApp["A Console Mobile (SwiftUI + ReplayEngine)"]
+        MRust["ACBridge (Rust idevice 静态库)"]
+        MVPN["LocalDevVPN (本机回环 10.7.0.1:62078)"]
+        MApp --> MRust -->|"TCP + 配对凭证"| MVPN
+    end
+
+    subgraph iPhone["iPhone 系统内部（iOS 17.4+）"]
+        Lock["lockdownd :62078"]
+        CDP["CoreDeviceProxy (CDTunnel + 用户态 TCP)"]
+        RSD["RSD 服务发现"]
+        DDI["DDI 挂载 (cryptexd / image_mounter)"]
+        DVT["dtservicehub (LocationSimulation)"]
+        CL["CoreLocation (整机定位输出)"]
+        Apps["微信 / 小程序 / 地图"]
+
+        Lock --> CDP --> RSD
+        RSD --> DDI
+        RSD --> DVT --> CL --> Apps
+    end
+
+    DUSB -->|"RemoteXPC 隧道"| RSD
+    MVPN -->|"回环路由改写"| Lock
+    CL -.->|"后台定位回读校验"| MApp
+```
+
+### 2. 手机单机版模块架构（`ios-mobile` 分支）
+
+手机端源码全部自包含在 `ios/` 目录，与原 macOS / Windows 控制台互相独立：
+
+```mermaid
+flowchart TB
+    subgraph UI["UI 层（SwiftUI + MapKit）"]
+        Root["MobileRootView (回放 / 预检 / 引导 / 设置)"]
+        Map["TrackPreviewMap (中国大陆自动转 GCJ-02 渲染)"]
+    end
+
+    subgraph Core["TrackCore 本地包（ios/Packages/TrackCore）"]
+        Parser["Route / KMLRoute (GPX & KML 解析)"]
+        Zip["ZipReader (纯 Swift Compression 解压 KMZ)"]
+        Pipe["TrackPipeline (归一化 / 标定 / 中线 / 公里扩展)"]
+    end
+
+    subgraph Engine["调度与保活层"]
+        Replay["ReplayEngine (ContinuousClock 1Hz 推点 / 状态机)"]
+        Pending["PendingRestoreStore (异常中断待恢复持久化)"]
+        Keep["LocationKeepAlive (后台定位 + 音频兜底 + 回读校验)"]
+    end
+
+    subgraph Device["设备连接层"]
+        Preflight["PreflightChecker (系统版本 / Wi-Fi / 回环探测 / 权限)"]
+        Pairing["PairingStore (Keychain 加密存配对文件)"]
+        Session["DeviceSession actor (串行化 + 指数退避重连)"]
+        Bridge["ACBridge (Rust C-ABI / LocalSet + Heartbeat)"]
+    end
+
+    Root --> Replay
+    Root --> Preflight
+    Root --> Map
+    Pipe --> Map
+    Core --> Replay
+    Replay --> Pending
+    Replay --> Keep
+    Replay --> Session
+    Pairing --> Session
+    Session --> Bridge
+```
+
+### 3. 坐标转换与轨迹时间线管线
+
+导入的轨迹文件在写入设备前，统一按以下管线完成基准归一化、标定偏移与时间轴展开：
+
+```mermaid
+flowchart LR
+    File["轨迹文件 (GPX / KML / KMZ)"] --> Norm["坐标基准归一化 (WGS-84 / GCJ-02 / BD-09 -> WGS-84)"]
+    Norm --> Pull["可选：回退一个基准 (抵消接收端 WGS-84 -> GCJ-02 偏移)"]
+    Pull --> Shift["标定偏移 (东/北米制平移)"]
+    Shift --> Fit["可选：LoopRoute.fit (多圈拟合单圈中线)"]
+    Fit --> Pace["按配速 / 圈数 / 公里数生成 ReplayTimeline"]
+    Pace --> Inject["1Hz 写入 LocationSimulation (WGS-84)"]
+```
+
 ## 更多信息
 
 - [控制台详细说明](macos/README.md)
