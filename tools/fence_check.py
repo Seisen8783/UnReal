@@ -288,18 +288,36 @@ def format_box(box):
             f"纬度 {box['minLatitude']:.6f}..{box['maxLatitude']:.6f}")
 
 
+def normalize_argv(argv):
+    """把 `--calibration -17.2,-11.5` 改写成 `--calibration=-17.2,-11.5`。
+
+    负数偏移以 `-` 开头，argparse 默认会当成选项名而不是值，直接报错。
+    """
+    result = []
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if token == "--calibration" and index + 1 < len(argv):
+            result.append(f"--calibration={argv[index + 1]}")
+            index += 2
+            continue
+        result.append(token)
+        index += 1
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description="校园跑围栏预检")
     parser.add_argument("track", help="轨迹文件（KMZ / KML / GPX / GeoJSON）")
     parser.add_argument("--datum", default="wgs84", choices=("wgs84", "gcj02", "bd09"),
                         help="轨迹文件用的坐标基准，默认 wgs84")
     parser.add_argument("--calibration", default="0,0",
-                        help="标定偏移「东,北」米，默认 0,0")
+                        help="标定偏移「东,北」米，默认 0,0（负数请写成 --calibration=-17.2,-11.5）")
     parser.add_argument("--fence", default=str(DEFAULT_FENCE), help="围栏数据文件")
     parser.add_argument("--target-margin", type=float, default=5.0,
                         help="要求的最小余量（米），默认 5")
     parser.add_argument("--json", action="store_true", help="只输出 JSON")
-    args = parser.parse_args()
+    args = parser.parse_args(normalize_argv(sys.argv[1:]))
 
     try:
         east, north = (float(v) for v in args.calibration.split(","))
@@ -345,6 +363,20 @@ def main():
             },
             "centerOffset": {"eastMeters": offset_east, "northMeters": offset_north},
         }
+        if reachable_box:
+            # 平移到实测可达区中心：同时满足服务端围栏与人能站到的范围，
+            # 且不改变跑道形状和每圈长度——比内缩更划算。
+            reach_east, reach_north = center_offset(reported_as_is, reachable_box)
+            shifted = [wgs84_to_gcj02(lng, lat) for lng, lat in
+                       apply_calibration(injected, reach_east, reach_north)]
+            shifted_reach = check_box(shifted, reachable_box)
+            suggestions["reachableCenterOffset"] = {
+                "eastMeters": reach_east,
+                "northMeters": reach_north,
+                "fenceMinMargin": check_box(shifted, fence_box)["minMargin"],
+                "reachableOutside": shifted_reach["outside"],
+                "lengthMeters": round(path_length(shifted), 1),
+            }
 
     report = {
         "track": str(args.track),
@@ -390,11 +422,17 @@ def main():
             print(f"✗ 余量不足：要求 {args.target_margin} m，实际 {as_is['minMargin']} m。"
                   f"围栏是反推值，残差 ±7 m，随时可能被判「非校园区域」。")
             if suggestions:
-                print(f"  → 建议一：标定偏移 设为 东 {suggestions['centerOffset']['eastMeters']} m / "
+                if "reachableCenterOffset" in suggestions:
+                    best = suggestions["reachableCenterOffset"]
+                    print(f"  → 建议一（推荐）：标定偏移 设为 东 {best['eastMeters']} m / 北 {best['northMeters']} m"
+                          f"（挪到实测可达区中心）——跑道形状和每圈长度都不变，")
+                    print(f"     改后围栏最小余量 {best['fenceMinMargin']} m，超出可达区 {best['reachableOutside']} 点，"
+                          f"总长 {best['lengthMeters']} m")
+                print(f"  → 建议二：标定偏移 设为 东 {suggestions['centerOffset']['eastMeters']} m / "
                       f"北 {suggestions['centerOffset']['northMeters']} m（把轨迹挪到围栏中心）")
-                print(f"  → 建议二：轨迹向内收缩 {suggestions['shrinkMeters']} m，"
+                print(f"  → 建议三：轨迹向内收缩 {suggestions['shrinkMeters']} m，"
                       f"余量变 {suggestions['shrinkResult']['minMargin']} m，"
-                      f"总长 {suggestions['shrinkResult']['lengthMeters']} m")
+                      f"总长 {suggestions['shrinkResult']['lengthMeters']} m（每圈变短，桩计里程不受影响）")
         else:
             print(f"✓ 全程在围栏内，最小余量 {as_is['minMargin']} m（要求 {args.target_margin} m）。")
 
